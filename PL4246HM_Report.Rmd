@@ -1,0 +1,152 @@
+---
+title: "PL4246HM_Report"
+output: html_document
+date: "2024-04-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+# load libraries
+library(tidyverse)
+library(igraph)
+library(dplyr)
+
+# load datasets
+responses <- read.csv('class-responses.csv')
+names <- read.csv('class-names.csv')
+```
+
+# Data Processing
+
+```{r}
+# Filter the responses to exclude weights of 1 and adjust remaining weights
+responses_new <- responses %>%
+  filter(weight > 1) %>%
+  mutate(weight = weight - 1)
+
+# Create a list of all unique nodes to include hermits
+all_nodes <- unique(c(responses$rater, responses$selected))
+
+# Create a graph with all nodes included
+rnet <- graph_from_data_frame(responses_new, vertices = data.frame(name=all_nodes), directed = TRUE)
+
+summary(rnet)
+```
+
+# Displaying the Network 
+
+```{r}
+par(mar=c(0,0,0,0)+.1)
+
+plot(rnet, layout = layout_nicely, 
+     vertex.size = 5,
+     vertex.color = "skyblue",  
+     edge.arrow.size = 0.5, 
+     vertex.label.cex = 0.7,  
+     vertex.label.dist = 1) 
+```
+
+# Analysis 1: All-strength centrality
+
+```{r}
+# Calculating strength 
+node_strength <- data.frame(
+  strength = strength(rnet))
+
+# Arrange the nodes by strength in descending order
+sorted_strength <- node_strength %>%
+  arrange(desc(strength))
+
+# Calculating the mean and the SD of strength of the nodes
+average_strength <- mean(node_strength$strength)
+sd_strength <- sd(node_strength$strength)
+
+# Maximum possible strength per node
+no_of_nodes <- 76 - 1
+max_strength <- no_of_nodes*4*2 # Multiply by 2 as it is in-strength + out-strength
+
+print(max_strength)
+print(sorted_strength)
+print(average_strength)
+print(sd_strength)
+```
+
+# Analysis 2: Assortative Mixing 
+
+```{r}
+# Replace NA values with a default category — "Not Provided"
+names$gender[is.na(names$gender)] <- "Not Provided"
+names$year_of_study[is.na(names$year_of_study)] <- "Not Provided"
+names$ethnicity[is.na(names$ethnicity)] <- "Not Provided"
+
+# Convert attributes to factors ensuring all levels are included
+names$gender <- factor(names$gender)
+names$year_of_study <- factor(names$year_of_study)
+names$ethnicity <- factor(names$ethnicity)
+
+# Reassign attributes to the igraph object
+V(rnet)$gender <- names$gender
+V(rnet)$year_of_study <- names$year_of_study
+V(rnet)$ethnicity <- names$ethnicity
+
+# Calculate assortativity
+assortativity_gender <- assortativity(rnet, V(rnet)$gender, directed = TRUE)
+assortativity_year_of_study <- assortativity(rnet, V(rnet)$year_of_study, directed = TRUE)
+assortativity_ethnicity <- assortativity(rnet, V(rnet)$ethnicity, directed = TRUE)
+assortativity_degree <- assortativity_degree(rnet, directed = TRUE)
+
+print(assortativity_gender)
+print(assortativity_year_of_study)
+print(assortativity_ethnicity)
+print(assortativity_degree)
+```
+
+# Analysis 3: Random Walk Community Detection
+
+```{r}
+walktrap_out <- cluster_walktrap(rnet, weights = NULL)
+V(rnet)$community_walktrap <- walktrap_out$membership
+
+# Modularity score 
+modularity_score <- modularity(rnet, walktrap_out$membership)
+print(modularity_score)
+
+# Calculate number of communities present
+num_communities <- length(unique(walktrap_out$membership))
+print(num_communities)
+
+# Calculate number of students in each community
+community_sizes <- table(walktrap_out$membership)
+print(community_sizes)
+```
+
+### Displaying the community detection
+
+```{r}
+par(mar=c(0,0,1,0)+.1)
+
+plot(rnet, vertex.color=V(rnet)$community_walktrap, 
+     vertex.size = 5,
+     vertex.frame.color = 'white', 
+     layout = layout_nicely, 
+     edge.arrow.size = 0.2,
+     vertex.label.cex = 0.7,  
+     vertex.label.dist = 1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
